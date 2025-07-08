@@ -252,7 +252,7 @@ const App = () => {
             <Card className="shadow-sm border-0">
               <Card.Body className="p-3">
                 <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap">
-                  <h6 className="text-muted m-0">Automated Emails Sent</h6>
+                  <h6 className="text-muted m-0">Automated Emails</h6>
                   <span className="badge bg-light text-success fw-semibold mt-1 mt-sm-0">
                     <CheckCircle2 className="me-1" size={14} />
                     14 Sent
