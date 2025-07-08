@@ -24,8 +24,8 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-const API_BASE = "https://domain-dash-node.onrender.com";
-// const API_BASE = "http://localhost:3000";
+// const API_BASE = "https://domain-dash-node.onrender.com";
+const API_BASE = "http://localhost:3000";
 
 const App = () => {
   const [domains, setDomains] = useState([]);
@@ -34,7 +34,7 @@ const App = () => {
   const [newDomain, setNewDomain] = useState("");
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
-  const [expiryFilter, setExpiryFilter] = useState(null); // null = no filter
+  const [expiryFilter, setExpiryFilter] = useState(null);
 
   const parseDateString = (dateStr) => {
     const [datePart, timePart] = dateStr.split(",");
@@ -251,9 +251,9 @@ const App = () => {
           <Col md={3}>
             <Card className="shadow-sm border-0">
               <Card.Body className="p-3">
-                <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap">
-                  <h6 className="text-muted m-0">Automated Emails</h6>
-                  <span className="badge bg-light text-success fw-semibold mt-1 mt-sm-0">
+                <div className="d-flex justify-content-between align-items-center mb-1 flex-wrap">
+                  <h6 className="text-muted m-0">Expired Emails Sent</h6>
+                  <span className="badge bg-light text-success fw-semibold">
                     <CheckCircle2 className="me-1" size={14} />
                     14 Sent
                   </span>
@@ -261,7 +261,10 @@ const App = () => {
 
                 <div className="d-flex align-items-center text-muted small">
                   <User size={14} className="me-2" />
-                  <span className="text-truncate" style={{ maxWidth: "100%" }}>
+                  <span
+                    className="text-truncate"
+                    style={{ maxWidth: "100%", marginBottom: "9px" }}
+                  >
                     suman****@clirnet.com
                   </span>
                 </div>
