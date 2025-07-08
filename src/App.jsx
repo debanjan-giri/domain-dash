@@ -18,50 +18,41 @@ import {
   Calendar,
   Globe,
   AlertTriangle,
+  Trash2,
+  Plus,
 } from "lucide-react";
 
-const App = () => {
-  const [domains, setDomains] = useState([
-    {
-      id: 1,
-      domain: "medisamvad.com",
-      status: "loading",
-      data: null,
-      lastChecked: null,
-    },
-    {
-      id: 2,
-      domain: "clirnet.com",
-      status: "loading",
-      data: null,
-      lastChecked: null,
-    },
-    {
-      id: 3,
-      domain: "doctor.clirnet.com",
-      status: "loading",
-      data: null,
-      lastChecked: null,
-    },
-  ]);
+// const API_BASE = "https://domain-dash-node.onrender.com";
+const API_BASE = "http://localhost:3000";
 
+const App = () => {
+  const [domains, setDomains] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [globalLoading, setGlobalLoading] = useState(false);
+  const [newDomain, setNewDomain] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const parseDateString = (dateStr) => {
+    const [datePart, timePart] = dateStr.split(",");
+    const [day, month, year] = datePart.trim().split("/").map(Number);
+    const [hours, minutes, seconds] = timePart.trim().split(":").map(Number);
+    return new Date(year, month - 1, day, hours, minutes, seconds);
+  };
 
   const fetchWhoisData = async (domain) => {
     try {
-      const res = await fetch(
-        `https://domain-dash-node.onrender.com/certificate-info?domain=${domain}`
-      );
+      const res = await fetch(`${API_BASE}/certificate-info?domain=${domain}`);
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
+      console.log(data);
       return {
         registrar: data.issuer?.organization || "-",
         expiration_date: data.expiresOn
-          ? new Date(data.expiresOn).getTime() / 1000
+          ? parseDateString(data.expiresOn).getTime() / 1000
           : null,
         issued_date: data.issuedOn
-          ? new Date(data.issuedOn).getTime() / 1000
+          ? parseDateString(data.issuedOn).getTime() / 1000
           : null,
       };
     } catch {
@@ -69,21 +60,60 @@ const App = () => {
     }
   };
 
-  const checkAllDomains = async () => {
+  const fetchDomainList = async () => {
     setGlobalLoading(true);
-    const updated = await Promise.all(
-      domains.map(async (d) => {
-        const data = await fetchWhoisData(d.domain);
-        return {
-          ...d,
-          data,
-          status: data ? "success" : "error",
-          lastChecked: new Date(),
-        };
-      })
-    );
-    setDomains(updated);
+    try {
+      const res = await fetch(`${API_BASE}/certificate-list`);
+      const list = await res.json();
+      const updated = await Promise.all(
+        list.map(async (d) => {
+          const data = await fetchWhoisData(d.domain);
+          return {
+            ...d,
+            data,
+            status: data ? "success" : "error",
+            lastChecked: new Date(),
+          };
+        })
+      );
+      setDomains(updated);
+    } catch (error) {
+      console.error("Failed to fetch domain list", error);
+    }
     setGlobalLoading(false);
+  };
+
+  const createDomain = async () => {
+    if (!newDomain) return;
+    setCreating(true);
+    try {
+      const res = await fetch(`${API_BASE}/certificate-create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: newDomain }),
+      });
+      if (!res.ok) throw new Error("Creation failed");
+      setNewDomain("");
+      await fetchDomainList();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const deleteDomain = async (id) => {
+    setDeletingId(id);
+    try {
+      await fetch(`${API_BASE}/certificate-delete/${id}`, {
+        method: "DELETE",
+      });
+      await fetchDomainList();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const getDaysUntilExpiry = (unix) => {
@@ -103,14 +133,13 @@ const App = () => {
     return { total: domains.length, active, errors, expiringSoon };
   };
 
+  useEffect(() => {
+    fetchDomainList();
+  }, []);
+
   const filteredDomains = domains.filter((d) =>
     d.domain.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  useEffect(() => {
-    checkAllDomains();
-  }, []);
-
   const stats = getStats();
 
   return (
@@ -118,28 +147,57 @@ const App = () => {
       style={{ background: "#f1f3f4", minHeight: "100vh", paddingTop: "30px" }}
     >
       <Container fluid="lg">
-        {/* Header Section */}
-        <div className="d-flex justify-content-between align-items-center mb-4">
-          <div>
-            <h4 className="fw-bold text-primary mb-1">SSL Domain Monitor</h4>
-            <div className="text-muted small">
-              Track SSL certificate expiry with real-time checks
+        {/* Header */}
+        <Row className="align-items-center mb-4 g-3">
+          {/* Column 1: Title & Subtitle */}
+          <Col lg={4} md={6}>
+            <div>
+              <h4 className="fw-bold text-primary mb-1">SSL Domain Monitor</h4>
+              <div className="text-muted small">Powered by Clirnet</div>
             </div>
-          </div>
-          <Button
-            onClick={checkAllDomains}
-            variant="primary"
-            className="d-flex align-items-center"
-            disabled={globalLoading}
-          >
-            {globalLoading ? (
-              <Spinner animation="border" size="sm" className="me-2" />
-            ) : (
-              <RefreshCw className="me-2" size={16} />
-            )}
-            Refresh All
-          </Button>
-        </div>
+          </Col>
+
+          {/* Column 2: Input + Add Button */}
+          <Col lg={4} md={6}>
+            <InputGroup>
+              <Form.Control
+                placeholder="Add new domain (e.g., example.com)"
+                value={newDomain}
+                onChange={(e) => setNewDomain(e.target.value)}
+              />
+              <Button
+                variant="primary"
+                onClick={createDomain}
+                disabled={creating}
+              >
+                {creating ? (
+                  <Spinner animation="border" size="sm" />
+                ) : (
+                  <>
+                    <Plus size={16} className="me-1" /> Add
+                  </>
+                )}
+              </Button>
+            </InputGroup>
+          </Col>
+
+          {/* Column 3: Refresh Button */}
+          <Col lg={4} className="text-lg-end">
+            <Button
+              onClick={fetchDomainList}
+              variant="primary"
+              className="d-flex align-items-center ms-lg-auto"
+              disabled={globalLoading}
+            >
+              {globalLoading ? (
+                <Spinner animation="border" size="sm" className="me-2" />
+              ) : (
+                <RefreshCw className="me-2" size={16} />
+              )}
+              Refresh All
+            </Button>
+          </Col>
+        </Row>
 
         {/* Stats */}
         <Row className="mb-3 g-3">
@@ -170,14 +228,14 @@ const App = () => {
           <Col md={3}>
             <Card className="shadow-sm border-0">
               <Card.Body>
-                <h6 className="text-muted">Errors</h6>
-                <h5 className="fw-bold text-danger">{stats.errors}</h5>
+                <h6 className="text-muted">Automated Emails Sent</h6>
+                <h5 className="fw-bold text-danger">10</h5>
               </Card.Body>
             </Card>
           </Col>
         </Row>
 
-        {/* Alert */}
+        {/* Warning */}
         {stats.expiringSoon > 0 && (
           <Alert variant="warning" className="d-flex align-items-center">
             <AlertTriangle className="me-2" />
@@ -185,19 +243,19 @@ const App = () => {
           </Alert>
         )}
 
-        {/* Search */}
+        {/* Search Input */}
         <InputGroup className="mb-4">
           <InputGroup.Text>
             <Search size={16} />
           </InputGroup.Text>
           <Form.Control
-            placeholder="Search domains..."
+            placeholder="Search in Table..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </InputGroup>
 
-        {/* Table */}
+        {/* Domain Table */}
         <Card className="border-0 shadow-sm">
           <Card.Body className="p-0">
             <Table responsive hover className="mb-0">
@@ -209,6 +267,7 @@ const App = () => {
                   <th>Issued On</th>
                   <th>Expiry Date</th>
                   <th>Days Left</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -243,7 +302,6 @@ const App = () => {
                             ).toLocaleDateString()
                           : "-"}
                       </td>
-
                       <td>
                         {d.data?.expiration_date
                           ? new Date(
@@ -267,6 +325,20 @@ const App = () => {
                         ) : (
                           "-"
                         )}
+                      </td>
+                      <td>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          onClick={() => deleteDomain(d.id)}
+                          disabled={deletingId === d.id}
+                        >
+                          {deletingId === d.id ? (
+                            <Spinner size="sm" animation="border" />
+                          ) : (
+                            <Trash2 size={16} />
+                          )}
+                        </Button>
                       </td>
                     </tr>
                   );
