@@ -20,6 +20,8 @@ import {
   AlertTriangle,
   Trash2,
   Plus,
+  User,
+  CheckCircle2,
 } from "lucide-react";
 
 const API_BASE = "https://domain-dash-node.onrender.com";
@@ -32,6 +34,7 @@ const App = () => {
   const [newDomain, setNewDomain] = useState("");
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [expiryFilter, setExpiryFilter] = useState(null); // null = no filter
 
   const parseDateString = (dateStr) => {
     const [datePart, timePart] = dateStr.split(",");
@@ -137,14 +140,34 @@ const App = () => {
     fetchDomainList();
   }, []);
 
-  const filteredDomains = domains.filter((d) =>
-    d.domain.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredDomains = domains.filter((d) => {
+    const matchesSearch = d.domain
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+
+    if (expiryFilter !== null) {
+      const days = getDaysUntilExpiry(d.data?.expiration_date);
+      if (days === null) return false;
+
+      if (expiryFilter === 0) return matchesSearch && days === 0;
+      if (expiryFilter === 2) return matchesSearch && days <= 2;
+      if (expiryFilter === 7) return matchesSearch && days <= 7;
+      if (expiryFilter === 30) return matchesSearch && days <= 30;
+    }
+
+    return matchesSearch;
+  });
+
   const stats = getStats();
 
   return (
     <div
-      style={{ background: "#f1f3f4", minHeight: "100vh", paddingTop: "30px" }}
+      style={{
+        background: "#f1f3f4",
+        minHeight: "100vh",
+        paddingTop: "30px",
+        paddingBottom: "30px",
+      }}
     >
       <Container fluid="lg">
         {/* Header */}
@@ -227,9 +250,22 @@ const App = () => {
           </Col>
           <Col md={3}>
             <Card className="shadow-sm border-0">
-              <Card.Body>
-                <h6 className="text-muted">Automated Emails Sent</h6>
-                <h5 className="fw-bold text-danger">10</h5>
+              <Card.Body className="p-3">
+                <div className="d-flex justify-content-between align-items-center mb-1">
+                  <h6 className="text-muted m-0">Automated Emails Sent</h6>
+                  <span className="badge bg-light text-success fw-semibold">
+                    <CheckCircle2 className="me-1" size={14} />
+                    14 Sent
+                  </span>
+                </div>
+
+                <div
+                  className="d-flex align-items-center text-muted small mb-2"
+                  style={{ paddingTop: "4px" }}
+                >
+                  <User size={14} className="me-2" />
+                  <span>suman****@clirnet.com</span>
+                </div>
               </Card.Body>
             </Card>
           </Col>
@@ -253,6 +289,21 @@ const App = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+          <Form.Select
+            style={{ maxWidth: "200px" }}
+            value={expiryFilter ?? ""}
+            onChange={(e) => {
+              const value =
+                e.target.value === "" ? null : parseInt(e.target.value);
+              setExpiryFilter(value);
+            }}
+          >
+            <option value="">All Expiry</option>
+            <option value="0">Today</option>
+            <option value="2">2 Days</option>
+            <option value="7">7 Days</option>
+            <option value="30">30 Days</option>
+          </Form.Select>
         </InputGroup>
 
         {/* Domain Table */}
@@ -277,8 +328,19 @@ const App = () => {
                     <tr key={d.id}>
                       <td className="px-4 py-3">
                         <div className="d-flex align-items-center">
-                          <Globe size={16} className="me-2 text-muted" />
-                          {d.domain}
+                          <Globe
+                            size={16}
+                            className="me-2 text-muted"
+                            color="#0d6efd"
+                          />
+                          <a
+                            href={`https://${d.domain}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-decoration-none text-dark link-hover"
+                          >
+                            {d.domain}
+                          </a>
                         </div>
                       </td>
                       <td>
