@@ -324,7 +324,7 @@ const App = () => {
                 {filteredDomains.map((d) => {
                   const days = getDaysUntilExpiry(d.data?.expiration_date);
                   return (
-                    <tr key={d.id}>
+                    <tr key={d._id}>
                       <td className="px-4 py-3">
                         <div className="d-flex align-items-center">
                           <Globe
@@ -391,10 +391,10 @@ const App = () => {
                         <Button
                           variant="link"
                           size="sm"
-                          onClick={() => deleteDomain(d.id)}
-                          disabled={deletingId === d.id}
+                          onClick={() => deleteDomain(d._id)}
+                          disabled={deletingId === d._id}
                         >
-                          {deletingId === d.id ? (
+                          {deletingId === d._id ? (
                             <Spinner size="sm" animation="border" />
                           ) : (
                             <Trash2 size={16} />
