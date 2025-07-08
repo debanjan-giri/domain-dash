@@ -251,20 +251,19 @@ const App = () => {
           <Col md={3}>
             <Card className="shadow-sm border-0">
               <Card.Body className="p-3">
-                <div className="d-flex justify-content-between align-items-center mb-1">
+                <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap">
                   <h6 className="text-muted m-0">Automated Emails Sent</h6>
-                  <span className="badge bg-light text-success fw-semibold">
+                  <span className="badge bg-light text-success fw-semibold mt-1 mt-sm-0">
                     <CheckCircle2 className="me-1" size={14} />
                     14 Sent
                   </span>
                 </div>
 
-                <div
-                  className="d-flex align-items-center text-muted small mb-2"
-                  style={{ paddingTop: "4px" }}
-                >
+                <div className="d-flex align-items-center text-muted small">
                   <User size={14} className="me-2" />
-                  <span>suman****@clirnet.com</span>
+                  <span className="text-truncate" style={{ maxWidth: "100%" }}>
+                    suman****@clirnet.com
+                  </span>
                 </div>
               </Card.Body>
             </Card>
