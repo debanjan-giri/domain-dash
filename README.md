@@ -1,12 +1,35 @@
-# React + Vite
+# 🌐 SSL Certificate Monitor Dashboard (Frontend)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A modern React.js dashboard to monitor SSL certificate expiry dates in real-time. Connects to a Node.js + MongoDB backend to fetch, cache, and display SSL info with features like search, expiry filters, domain management, and visual alerts.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🔥 Features
 
-## Expanding the ESLint configuration
+- ✅ View live certificate data: issuer, expiry, registrar
+- 📅 Visual expiry tracker with color-coded badges
+- 🔍 Search and filter domains by name or expiry threshold (2/7/30 days)
+- ➕ Add new domains
+- ❌ Delete domains
+- 🔁 Refresh all domain records
+- 📬 Shows email recipients who receive expiry alerts
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+---
+
+## 🛠 Tech Stack
+
+- React 18/19
+- React Bootstrap
+- Lucide Icons
+- Fetch API
+- RESTful Backend (Node.js + Express)
+
+---
+
+## 🚀 Getting Started
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/yourusername/ssl-monitor-frontend.git
+cd ssl-monitor-frontend
