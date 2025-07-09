@@ -24,8 +24,8 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-// const API_BASE = "https://domain-dash-node.onrender.com";
-const API_BASE = "http://localhost:3000";
+const API_BASE = "https://domain-dash-node.onrender.com";
+// const API_BASE = "http://localhost:3000";
 
 const App = () => {
   const [domains, setDomains] = useState([]);
