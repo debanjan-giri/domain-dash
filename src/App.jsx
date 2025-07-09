@@ -175,7 +175,7 @@ const App = () => {
           {/* Column 1: Title & Subtitle */}
           <Col lg={4} md={6}>
             <div>
-              <h4 className="fw-bold text-primary mb-1">SSL Domain Monitor</h4>
+              <h4 className="fw-bold text-primary mb-1">SSL Expiry Monitor</h4>
               <div className="text-muted small">Powered by Clirnet</div>
             </div>
           </Col>
@@ -252,10 +252,10 @@ const App = () => {
             <Card className="shadow-sm border-0">
               <Card.Body className="p-3">
                 <div className="d-flex justify-content-between align-items-center mb-1 flex-wrap">
-                  <h6 className="text-muted m-0">Expired Emails Sent</h6>
+                  <h6 className="text-muted m-0">Expired Emails Sent To</h6>
                   <span className="badge bg-light text-success fw-semibold">
                     <CheckCircle2 className="me-1" size={14} />
-                    14 Sent
+                    Total 14
                   </span>
                 </div>
 
