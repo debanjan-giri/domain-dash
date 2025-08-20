@@ -11,6 +11,8 @@ import {
   Spinner,
   InputGroup,
   Form,
+  OverlayTrigger,
+  Tooltip,
 } from "react-bootstrap";
 import {
   Search,
@@ -22,10 +24,13 @@ import {
   Plus,
   User,
   CheckCircle2,
+  Server,
+  Network,
+  Clock,
 } from "lucide-react";
 
-const API_BASE = "https://domain-dash-node.onrender.com";
-// const API_BASE = "http://localhost:3000";
+// const API_BASE = "https://domain-dash-node.onrender.com";
+const API_BASE = "http://localhost:3000";
 
 const App = () => {
   const [domains, setDomains] = useState([]);
@@ -36,86 +41,84 @@ const App = () => {
   const [deletingId, setDeletingId] = useState(null);
   const [expiryFilter, setExpiryFilter] = useState(null);
 
-  const parseDateString = (dateStr) => {
-    const [datePart, timePart] = dateStr.split(",");
-    const [day, month, year] = datePart.trim().split("/").map(Number);
-    const [hours, minutes, seconds] = timePart.trim().split(":").map(Number);
-    return new Date(year, month - 1, day, hours, minutes, seconds);
-  };
-
-  const fetchWhoisData = async (domain) => {
-    try {
-      const res = await fetch(`${API_BASE}/certificate-info?domain=${domain}`);
-      if (!res.ok) throw new Error("Failed");
-      const data = await res.json();
-      console.log(data);
-      return {
-        registrar: data.issuer?.organization || "-",
-        expiration_date: data.expiresOn
-          ? parseDateString(data.expiresOn).getTime() / 1000
-          : null,
-        issued_date: data.issuedOn
-          ? parseDateString(data.issuedOn).getTime() / 1000
-          : null,
-      };
-    } catch {
-      return null;
-    }
-  };
-
-  const fetchDomainList = async () => {
+  // Fetch all domains with SSL data in one API call
+  const fetchAllDomainsWithSSLData = async () => {
     setGlobalLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/certificate-list`);
-      const list = await res.json();
-      const updated = await Promise.all(
-        list.map(async (d) => {
-          const data = await fetchWhoisData(d.domain);
-          return {
-            ...d,
-            data,
-            status: data ? "success" : "error",
-            lastChecked: new Date(),
-          };
-        })
-      );
-      setDomains(updated);
+      const res = await fetch(`${API_BASE}/certificate-bulk`);
+      if (!res.ok) throw new Error("Failed to fetch domains");
+      const domainsWithSSLData = await res.json();
+      setDomains(domainsWithSSLData);
     } catch (error) {
       console.error("Failed to fetch domain list", error);
+      // Fallback to empty array if bulk endpoint fails
+      setDomains([]);
     }
     setGlobalLoading(false);
   };
 
+  // Create domain and get SSL data in one call
   const createDomain = async () => {
-    if (!newDomain) return;
+    if (!newDomain.trim()) return;
     setCreating(true);
     try {
       const res = await fetch(`${API_BASE}/certificate-create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: newDomain }),
+        body: JSON.stringify({ domain: newDomain.trim() }),
       });
-      if (!res.ok) throw new Error("Creation failed");
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Creation failed");
+      }
+
+      const result = await res.json();
+
+      // Add the new domain with SSL data to the existing list
+      setDomains((prevDomains) => [result.domain, ...prevDomains]);
       setNewDomain("");
-      await fetchDomainList();
     } catch (err) {
-      console.error(err);
+      console.error("Failed to create domain:", err);
+      alert(`Failed to add domain: ${err.message}`);
     } finally {
       setCreating(false);
     }
   };
 
+  // Delete domain
   const deleteDomain = async (id) => {
     setDeletingId(id);
     try {
-      await fetch(`${API_BASE}/certificate-delete/${id}`, {
+      const res = await fetch(`${API_BASE}/certificate-delete/${id}`, {
         method: "DELETE",
       });
-      await fetchDomainList();
+
+      if (!res.ok) throw new Error("Failed to delete domain");
+
+      // Remove domain from local state
+      setDomains((prevDomains) => prevDomains.filter((d) => d._id !== id));
     } catch (err) {
-      console.error(err);
+      console.error("Failed to delete domain:", err);
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  // Refresh single domain (optional - for individual refresh buttons)
+  const refreshSingleDomain = async (domainId) => {
+    try {
+      const res = await fetch(`${API_BASE}/certificate-single/${domainId}`);
+      if (!res.ok) throw new Error("Failed to refresh domain");
+
+      const updatedDomain = await res.json();
+
+      // Update the specific domain in the list
+      setDomains((prevDomains) =>
+        prevDomains.map((d) => (d._id === domainId ? updatedDomain : d))
+      );
+    } catch (err) {
+      console.error("Failed to refresh single domain:", err);
     }
   };
 
@@ -136,8 +139,15 @@ const App = () => {
     return { total: domains.length, active, errors, expiringSoon };
   };
 
+  // Handle Enter key press in domain input
+  const handleDomainInputKeyPress = (e) => {
+    if (e.key === "Enter" && !creating) {
+      createDomain();
+    }
+  };
+
   useEffect(() => {
-    fetchDomainList();
+    fetchAllDomainsWithSSLData();
   }, []);
 
   const filteredDomains = domains.filter((d) => {
@@ -159,6 +169,13 @@ const App = () => {
   });
 
   const stats = getStats();
+
+  // Function to render a tooltip for the raw expiry date
+  const renderExpiryTooltip = (props, rawDate) => (
+    <Tooltip id="expiry-tooltip" {...props}>
+      Raw expiry: {rawDate || "N/A"}
+    </Tooltip>
+  );
 
   return (
     <div
@@ -187,11 +204,13 @@ const App = () => {
                 placeholder="Add new domain (e.g., example.com)"
                 value={newDomain}
                 onChange={(e) => setNewDomain(e.target.value)}
+                onKeyPress={handleDomainInputKeyPress}
+                disabled={creating}
               />
               <Button
                 variant="primary"
                 onClick={createDomain}
-                disabled={creating}
+                disabled={creating || !newDomain.trim()}
               >
                 {creating ? (
                   <Spinner animation="border" size="sm" />
@@ -207,7 +226,7 @@ const App = () => {
           {/* Column 3: Refresh Button */}
           <Col lg={4} className="text-lg-end">
             <Button
-              onClick={fetchDomainList}
+              onClick={fetchAllDomainsWithSSLData}
               variant="primary"
               className="d-flex align-items-center ms-lg-auto"
               disabled={globalLoading}
@@ -217,7 +236,7 @@ const App = () => {
               ) : (
                 <RefreshCw className="me-2" size={16} />
               )}
-              Refresh All
+              {globalLoading ? "Refreshing..." : "Refresh All"}
             </Button>
           </Col>
         </Row>
@@ -273,6 +292,15 @@ const App = () => {
           </Col>
         </Row>
 
+        {/* Loading indicator for global refresh */}
+        {globalLoading && (
+          <Alert variant="info" className="d-flex align-items-center">
+            <Spinner size="sm" className="me-2" />
+            Fetching SSL certificate data for all domains... This may take a few
+            moments.
+          </Alert>
+        )}
+
         {/* Warning */}
         {stats.expiringSoon > 0 && (
           <Alert variant="warning" className="d-flex align-items-center">
@@ -287,7 +315,7 @@ const App = () => {
             <Search size={16} />
           </InputGroup.Text>
           <Form.Control
-            placeholder="Search in Table..."
+            placeholder="Search domains..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -301,7 +329,7 @@ const App = () => {
             }}
           >
             <option value="">All Expiry</option>
-            <option value="0">Today</option>
+            <option value="0">Expired</option>
             <option value="2">2 Days</option>
             <option value="7">7 Days</option>
             <option value="30">30 Days</option>
@@ -311,104 +339,200 @@ const App = () => {
         {/* Domain Table */}
         <Card className="border-0 shadow-sm">
           <Card.Body className="p-0">
-            <Table responsive hover className="mb-0">
-              <thead className="bg-light text-muted">
-                <tr>
-                  <th className="px-4 py-3">Domain</th>
-                  <th>Status</th>
-                  <th>Registrar</th>
-                  <th>Issued On</th>
-                  <th>Expiry Date</th>
-                  <th>Days Left</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredDomains.map((d) => {
-                  const days = getDaysUntilExpiry(d.data?.expiration_date);
-                  return (
-                    <tr key={d._id}>
-                      <td className="px-4 py-3">
-                        <div className="d-flex align-items-center">
-                          <Globe
-                            size={16}
-                            className="me-2 text-muted"
-                            color="#0d6efd"
-                          />
-                          <a
-                            href={`https://${d.domain}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-decoration-none text-dark link-hover"
-                          >
-                            {d.domain}
-                          </a>
-                        </div>
-                      </td>
-                      <td>
-                        <Badge
-                          bg={
-                            d.status === "success"
-                              ? "success"
-                              : d.status === "error"
-                              ? "danger"
-                              : "secondary"
-                          }
-                        >
-                          {d.status === "loading" ? "Loading..." : d.status}
-                        </Badge>
-                      </td>
-                      <td>{d.data?.registrar || "-"}</td>
-                      <td>
-                        {d.data?.issued_date
-                          ? new Date(
-                              d.data.issued_date * 1000
-                            ).toLocaleDateString()
-                          : "-"}
-                      </td>
-                      <td>
-                        {d.data?.expiration_date
-                          ? new Date(
-                              d.data.expiration_date * 1000
-                            ).toLocaleDateString()
-                          : "-"}
-                      </td>
-                      <td>
-                        {days !== null ? (
-                          <Badge
-                            bg={
-                              days < 30
-                                ? "danger"
-                                : days < 90
-                                ? "warning"
-                                : "success"
-                            }
-                          >
-                            {days} days
-                          </Badge>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                      <td>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          onClick={() => deleteDomain(d._id)}
-                          disabled={deletingId === d._id}
-                        >
-                          {deletingId === d._id ? (
-                            <Spinner size="sm" animation="border" />
-                          ) : (
-                            <Trash2 size={16} />
-                          )}
-                        </Button>
-                      </td>
+            {filteredDomains.length === 0 && !globalLoading ? (
+              <div className="text-center py-5">
+                <Globe size={48} className="text-muted mb-3" />
+                <h5 className="text-muted">No domains found</h5>
+                <p className="text-muted">
+                  {domains.length === 0
+                    ? "Add your first domain to get started"
+                    : "Try adjusting your search filters"}
+                </p>
+              </div>
+            ) : (
+              <div className="table-responsive">
+                <Table hover className="mb-0">
+                  <thead className="bg-light text-muted">
+                    <tr>
+                      <th className="px-4 py-3">Domain</th>
+                      <th>Status</th>
+                      <th>DNS Host</th>
+                      <th>Name Servers</th>
+                      <th>Registrar</th>
+                      <th>Issued On</th>
+                      <th>Expiry Date</th>
+                      <th>Days Left</th>
+                      <th>Actions</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </Table>
+                  </thead>
+                  <tbody>
+                    {filteredDomains.map((d) => {
+                      const days = getDaysUntilExpiry(d.data?.expiration_date);
+                      return (
+                        <tr key={d._id}>
+                          <td className="px-4 py-3">
+                            <div className="d-flex align-items-center">
+                              <Globe
+                                size={16}
+                                className="me-2 text-muted"
+                                color="#0d6efd"
+                              />
+                              <a
+                                href={`https://${d.domain}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-decoration-none text-dark link-hover"
+                              >
+                                {d.domain}
+                              </a>
+                            </div>
+                          </td>
+                          <td>
+                            <Badge
+                              bg={
+                                d.status === "success"
+                                  ? "success"
+                                  : d.status === "error"
+                                  ? "danger"
+                                  : "secondary"
+                              }
+                            >
+                              {d.status === "loading" ? "Loading..." : d.status}
+                            </Badge>
+                          </td>
+                          <td>
+                            {d.dnsHost && d.dnsHost.length > 0 ? (
+                              <OverlayTrigger
+                                placement="top"
+                                overlay={
+                                  <Tooltip id={`dns-tooltip-${d._id}`}>
+                                    {d.dnsHost.join(", ")}
+                                  </Tooltip>
+                                }
+                              >
+                                <Badge
+                                  bg="secondary"
+                                  className="cursor-pointer"
+                                >
+                                  <Server size={12} className="me-1" />
+                                  {d.dnsHost.length} IP(s)
+                                </Badge>
+                              </OverlayTrigger>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                          <td>
+                            {d.nameServers && d.nameServers.length > 0 ? (
+                              <OverlayTrigger
+                                placement="top"
+                                overlay={
+                                  <Tooltip id={`ns-tooltip-${d._id}`}>
+                                    {d.nameServers.join(", ")}
+                                  </Tooltip>
+                                }
+                              >
+                                <Badge
+                                  bg="secondary"
+                                  className="cursor-pointer"
+                                >
+                                  <Network size={12} className="me-1" />
+                                  {d.nameServers.length} NS
+                                </Badge>
+                              </OverlayTrigger>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                          <td>{d.data?.registrar || "-"}</td>
+                          <td>
+                            {d.data?.issued_date
+                              ? new Date(
+                                  d.data.issued_date * 1000
+                                ).toLocaleDateString()
+                              : "-"}
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <div className="d-flex flex-column">
+                                <div>
+                                  {d.data?.expiration_date
+                                    ? new Date(
+                                        d.data.expiration_date * 1000
+                                      ).toLocaleDateString("en-GB", {
+                                        day: "2-digit",
+                                        month: "short",
+                                        year: "2-digit",
+                                      })
+                                    : "-"}
+                                </div>
+                                <div className="bg-light text-muted small ps-2 rounded">
+                                  {d.data?.expiration_date
+                                    ? new Date(
+                                        d.data.expiration_date * 1000
+                                      ).toLocaleTimeString([], {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                        hour12: true, // set false if you want 24h format
+                                      })
+                                    : "-"}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            {days !== null ? (
+                              <Badge
+                                bg={
+                                  days < 7
+                                    ? "danger"
+                                    : days < 14
+                                    ? "warning"
+                                    : days < 30
+                                    ? "success"
+                                    : "success"
+                                }
+                              >
+                                {days < 0 ? "Expired" : `${days} days`}
+                              </Badge>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                          <td>
+                            <div className="d-flex gap-1">
+                              {/* Optional: Individual refresh button */}
+                              <Button
+                                variant="link"
+                                size="sm"
+                                onClick={() => refreshSingleDomain(d._id)}
+                                title="Refresh this domain"
+                              >
+                                <RefreshCw size={14} />
+                              </Button>
+                              <Button
+                                variant="link"
+                                size="sm"
+                                onClick={() => deleteDomain(d._id)}
+                                disabled={deletingId === d._id}
+                                className="text-danger"
+                                title="Delete domain"
+                              >
+                                {deletingId === d._id ? (
+                                  <Spinner size="sm" animation="border" />
+                                ) : (
+                                  <Trash2 size={16} />
+                                )}
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              </div>
+            )}
           </Card.Body>
         </Card>
       </Container>
