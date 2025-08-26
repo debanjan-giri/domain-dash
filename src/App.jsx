@@ -13,6 +13,7 @@ import {
   Form,
   OverlayTrigger,
   Tooltip,
+  Modal,
 } from "react-bootstrap";
 import {
   Search,
@@ -27,10 +28,11 @@ import {
   Server,
   Network,
   Clock,
+  Mail,
 } from "lucide-react";
 
-const API_BASE = "https://domain-dash-node.onrender.com";
-// const API_BASE = "http://localhost:3000";
+// const API_BASE = "https://domain-dash-node.onrender.com";
+const API_BASE = "http://localhost:3000";
 
 const App = () => {
   const [domains, setDomains] = useState([]);
@@ -40,6 +42,9 @@ const App = () => {
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [expiryFilter, setExpiryFilter] = useState(null);
+  const [showTestModal, setShowTestModal] = useState(false);
+  const [testEmailLoading, setTestEmailLoading] = useState(false);
+  const [testEmailType, setTestEmailType] = useState("all");
 
   // Fetch all domains with SSL data in one API call
   const fetchAllDomainsWithSSLData = async () => {
@@ -51,7 +56,6 @@ const App = () => {
       setDomains(domainsWithSSLData);
     } catch (error) {
       console.error("Failed to fetch domain list", error);
-      // Fallback to empty array if bulk endpoint fails
       setDomains([]);
     }
     setGlobalLoading(false);
@@ -67,15 +71,11 @@ const App = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ domain: newDomain.trim() }),
       });
-
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || "Creation failed");
       }
-
       const result = await res.json();
-
-      // Add the new domain with SSL data to the existing list
       setDomains((prevDomains) => [result.domain, ...prevDomains]);
       setNewDomain("");
     } catch (err) {
@@ -93,10 +93,7 @@ const App = () => {
       const res = await fetch(`${API_BASE}/certificate-delete/${id}`, {
         method: "DELETE",
       });
-
       if (!res.ok) throw new Error("Failed to delete domain");
-
-      // Remove domain from local state
       setDomains((prevDomains) => prevDomains.filter((d) => d._id !== id));
     } catch (err) {
       console.error("Failed to delete domain:", err);
@@ -105,20 +102,49 @@ const App = () => {
     }
   };
 
-  // Refresh single domain (optional - for individual refresh buttons)
+  // Refresh single domain
   const refreshSingleDomain = async (domainId) => {
     try {
       const res = await fetch(`${API_BASE}/certificate-single/${domainId}`);
       if (!res.ok) throw new Error("Failed to refresh domain");
-
       const updatedDomain = await res.json();
-
-      // Update the specific domain in the list
       setDomains((prevDomains) =>
         prevDomains.map((d) => (d._id === domainId ? updatedDomain : d))
       );
     } catch (err) {
       console.error("Failed to refresh single domain:", err);
+    }
+  };
+
+  // Send test email
+  const sendTestEmail = async () => {
+    setTestEmailLoading(true);
+    try {
+      let endpoint;
+      switch (testEmailType) {
+        case "7days":
+          endpoint = "/test-email-7days";
+          break;
+        case "2days":
+          endpoint = "/test-email-2days";
+          break;
+        case "today":
+          endpoint = "/test-email-today";
+          break;
+        default:
+          endpoint = "/test-email";
+      }
+
+      const res = await fetch(`${API_BASE}${endpoint}`);
+      if (!res.ok) throw new Error("Failed to send test email");
+      const result = await res.json();
+      alert(result.message);
+      setShowTestModal(false);
+    } catch (err) {
+      console.error("Failed to send test email:", err);
+      alert(`Failed to send test email: ${err.message}`);
+    } finally {
+      setTestEmailLoading(false);
     }
   };
 
@@ -139,7 +165,6 @@ const App = () => {
     return { total: domains.length, active, errors, expiringSoon };
   };
 
-  // Handle Enter key press in domain input
   const handleDomainInputKeyPress = (e) => {
     if (e.key === "Enter" && !creating) {
       createDomain();
@@ -154,28 +179,18 @@ const App = () => {
     const matchesSearch = d.domain
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
-
     if (expiryFilter !== null) {
       const days = getDaysUntilExpiry(d.data?.expiration_date);
       if (days === null) return false;
-
       if (expiryFilter === 0) return matchesSearch && days === 0;
       if (expiryFilter === 2) return matchesSearch && days <= 2;
       if (expiryFilter === 7) return matchesSearch && days <= 7;
       if (expiryFilter === 30) return matchesSearch && days <= 30;
     }
-
     return matchesSearch;
   });
 
   const stats = getStats();
-
-  // Function to render a tooltip for the raw expiry date
-  const renderExpiryTooltip = (props, rawDate) => (
-    <Tooltip id="expiry-tooltip" {...props}>
-      Raw expiry: {rawDate || "N/A"}
-    </Tooltip>
-  );
 
   return (
     <div
@@ -196,7 +211,6 @@ const App = () => {
               <div className="text-muted small">Powered by Clirnet</div>
             </div>
           </Col>
-
           {/* Column 2: Input + Add Button */}
           <Col lg={4} md={6}>
             <InputGroup>
@@ -222,22 +236,31 @@ const App = () => {
               </Button>
             </InputGroup>
           </Col>
-
-          {/* Column 3: Refresh Button */}
+          {/* Column 3: Action Buttons */}
           <Col lg={4} className="text-lg-end">
-            <Button
-              onClick={fetchAllDomainsWithSSLData}
-              variant="primary"
-              className="d-flex align-items-center ms-lg-auto"
-              disabled={globalLoading}
-            >
-              {globalLoading ? (
-                <Spinner animation="border" size="sm" className="me-2" />
-              ) : (
-                <RefreshCw className="me-2" size={16} />
-              )}
-              {globalLoading ? "Refreshing..." : "Refresh All"}
-            </Button>
+            <div className="d-flex gap-2 justify-content-lg-end">
+              <Button
+                onClick={() => setShowTestModal(true)}
+                variant="outline-primary"
+                className="d-flex align-items-center"
+              >
+                <Mail className="me-2" size={16} />
+                Test Corn Email
+              </Button>
+              <Button
+                onClick={fetchAllDomainsWithSSLData}
+                variant="primary"
+                className="d-flex align-items-center"
+                disabled={globalLoading}
+              >
+                {globalLoading ? (
+                  <Spinner animation="border" size="sm" className="me-2" />
+                ) : (
+                  <RefreshCw className="me-2" size={16} />
+                )}
+                {globalLoading ? "Refreshing..." : "Refresh All"}
+              </Button>
+            </div>
           </Col>
         </Row>
 
@@ -277,7 +300,6 @@ const App = () => {
                     Total 14
                   </span>
                 </div>
-
                 <div className="d-flex align-items-center text-muted small">
                   <User size={14} className="me-2" />
                   <span
@@ -361,6 +383,7 @@ const App = () => {
                       <th>Registrar</th>
                       <th>Issued On</th>
                       <th>Expiry Date</th>
+                      <th>Domain Expiry</th>
                       <th>Days Left</th>
                       <th>Actions</th>
                     </tr>
@@ -473,7 +496,35 @@ const App = () => {
                                       ).toLocaleTimeString([], {
                                         hour: "2-digit",
                                         minute: "2-digit",
-                                        hour12: true, // set false if you want 24h format
+                                        hour12: true,
+                                      })
+                                    : "-"}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <div className="d-flex flex-column">
+                                <div>
+                                  {d?.domain_expiry_date
+                                    ? new Date(
+                                        d?.domain_expiry_date
+                                      ).toLocaleDateString("en-GB", {
+                                        day: "2-digit",
+                                        month: "short",
+                                        year: "2-digit",
+                                      })
+                                    : "-"}
+                                </div>
+                                <div className="bg-light text-muted small ps-2 rounded">
+                                  {d?.domain_expiry_date
+                                    ? new Date(
+                                        d?.domain_expiry_date
+                                      ).toLocaleTimeString("en-GB", {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                        hour12: true,
                                       })
                                     : "-"}
                                 </div>
@@ -484,12 +535,14 @@ const App = () => {
                             {days !== null ? (
                               <Badge
                                 bg={
-                                  days < 7
+                                  days < 0
+                                    ? "danger"
+                                    : days < 7
                                     ? "danger"
                                     : days < 14
                                     ? "warning"
                                     : days < 30
-                                    ? "success"
+                                    ? "info"
                                     : "success"
                                 }
                               >
@@ -501,7 +554,6 @@ const App = () => {
                           </td>
                           <td>
                             <div className="d-flex gap-1">
-                              {/* Optional: Individual refresh button */}
                               <Button
                                 variant="link"
                                 size="sm"
@@ -536,6 +588,72 @@ const App = () => {
           </Card.Body>
         </Card>
       </Container>
+
+      {/* Test Email Modal */}
+      <Modal show={showTestModal} onHide={() => setShowTestModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Send Test Email</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>Select which type of expiry alert you want to test:</p>
+          <Form>
+            <Form.Check
+              type="radio"
+              id="test-7days"
+              name="testEmailType"
+              label="7 days expiry alert"
+              value="7days"
+              checked={testEmailType === "7days"}
+              onChange={(e) => setTestEmailType(e.target.value)}
+              className="mb-2"
+            />
+            <Form.Check
+              type="radio"
+              id="test-2days"
+              name="testEmailType"
+              label="2 days expiry alert"
+              value="2days"
+              checked={testEmailType === "2days"}
+              onChange={(e) => setTestEmailType(e.target.value)}
+              className="mb-2"
+            />
+            <Form.Check
+              type="radio"
+              id="test-today"
+              name="testEmailType"
+              label="Today expiry alert"
+              value="today"
+              checked={testEmailType === "today"}
+              onChange={(e) => setTestEmailType(e.target.value)}
+            />
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowTestModal(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={sendTestEmail}
+            disabled={testEmailLoading}
+          >
+            {testEmailLoading ? (
+              <>
+                <Spinner
+                  as="span"
+                  animation="border"
+                  size="sm"
+                  role="status"
+                  aria-hidden="true"
+                />
+                <span className="ms-2">Sending...</span>
+              </>
+            ) : (
+              "Send Test Email"
+            )}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };
